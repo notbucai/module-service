@@ -4,9 +4,19 @@ const KoaRouter = require('koa-router');
 const koaBody = require('koa-body');
 const logger = require('koa-logger')
 const { HTTPError } = require('./errors');
-const { installModule } = require('./install');
+const { installModule, loadModule } = require('./install');
 const app = new Koa();
 const router = new KoaRouter();
+
+const modules = {
+  // 格式
+  // list: {
+  //  // 一些配置
+  // module:require('path'),
+  // options:{},
+  // }
+};
+
 app.use(logger());
 app.use(async (ctx, next) => {
   const resData = {
@@ -46,9 +56,9 @@ router.post('/installmodule', koaBody({
   if (file.type !== 'application/zip') {
     return ctx.body = ctx.throw(new HTTPError("请传入正确格式的文件", 1000));
   }
+  // const path = 123;
 
-  // console.log(file);
-  installModule(file.path);
+  installModule(file.path, file.name);
   // // 创建可读流
   // const reader = fs.createReadStream(file.path);
   // let filePath = path.join(__dirname, 'temp') + `/${file.name}`;
@@ -60,8 +70,18 @@ router.post('/installmodule', koaBody({
 });
 
 router.all('/modules/:module', async (ctx, next) => {
-  // ctx.params.module
-  ctx.body = '该模块未安装';
+  const moduleName = ctx.params.module;
+  let module = modules[moduleName];
+  if (Object.prototype.toString.call(module) !== '[object Object]') {
+    module = modules[moduleName] = loadModule(moduleName);
+    if (Object.prototype.toString.call(module) !== '[object Object]') {
+      return ctx.body = '该模块未安装';
+    }
+  }
+
+  const body = await module.module();
+
+  ctx.body = body;
 });
 
 app.use(router.routes()).use(router.allowedMethods());
